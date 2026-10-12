@@ -1,0 +1,13 @@
+.DS_Store
+Thumbs.db
+db.json
+*.log
+node_modules/
+public/
+.deploy*/
+_multiconfig.yml
+.claude/
+# 本地学习笔记，不纳入公开仓库
+博客搭建准备要点.txt
+搭建过程记录.txt
+本地博客使用说明.txt
