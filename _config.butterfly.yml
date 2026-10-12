@@ -23,6 +23,7 @@ menu:
   Categories: /categories/ || fas fa-folder-open
   Tags: /tags/ || fas fa-tags
   Projects: /projects/ || fas fa-code
+  画板: /geo/ || fas fa-draw-polygon
   About: /about/ || fas fa-user
   # Home: / || fas fa-home
   # List||fas fa-list:

@@ -1,0 +1,236 @@
+/* ============================================================
+ * 凸包画板 · 样式
+ * ------------------------------------------------------------
+ * :root 里是"兜底默认值"，实际外观由 config.js 覆盖。
+ * ★ 想改美术风格，请改 config.js，不要改这里。
+ * ============================================================ */
+:root {
+  --geo-bg: #f4f6fb;
+  --geo-text: #344054;
+  --geo-accent: #2f6feb;
+
+  --geo-point: #2f6feb;
+  --geo-point-stroke: #ffffff;
+  --geo-point-hover: #ff7a45;
+  --geo-point-sel: #12b76a;
+
+  --geo-edge: #98a2b3;
+  --geo-edge-hover: #ff7a45;
+  --geo-edge-sel: #12b76a;
+
+  --geo-grid: #e4e9f2;
+
+  --geo-menu-bg: #ffffff;
+  --geo-menu-text: #344054;
+  --geo-menu-border: #e4e9f2;
+  --geo-menu-shadow: 0 6px 24px rgba(16, 24, 40, .14);
+  --geo-menu-hover: #f2f4f7;
+
+  --geo-panel-bg: #ffffff;
+  --geo-panel-border: #e4e9f2;
+  --geo-panel-text: #344054;
+  --geo-panel-label: #667085;
+  --geo-panel-btn-bg: #f2f4f7;
+  --geo-panel-btn-text: #344054;
+  --geo-panel-btn-active-bg: #2f6feb;
+  --geo-panel-btn-active-text: #ffffff;
+  --geo-panel-width: 128px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--geo-text);
+}
+
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---------- 顶部工具栏 ---------- */
+#toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 14px;
+  padding: 8px 14px;
+  background: #fff;
+  border-bottom: 1px solid #e9edf3;
+}
+.geo-title { font-weight: 600; margin-right: 2px; }
+#toolbar .ctl { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #667085; }
+#toolbar .ctl input[type=color] {
+  width: 28px; height: 20px; padding: 0; background: none;
+  border: 1px solid var(--geo-panel-border); border-radius: 4px; cursor: pointer;
+}
+#toolbar .ctl input[type=number] {
+  width: 48px; padding: 2px 4px; font-size: 12px; color: var(--geo-panel-text);
+  border: 1px solid var(--geo-panel-border); border-radius: 4px;
+}
+#toolbar .ctl-target { font-size: 11px; color: #98a2b3; }
+.geo-danger {
+  margin-left: auto;
+  border: 1px solid #f1b0ab; background: #fff; color: #b42318;
+  border-radius: 6px; padding: 5px 12px; cursor: pointer;
+}
+.geo-danger:hover { background: #fef3f2; }
+
+/* ---------- 画布 ---------- */
+#stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: var(--geo-bg);
+}
+#canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: default; }
+
+/* ---------- 弹出小菜单 ---------- */
+#menu, #menu2 {
+  position: absolute; margin: 0; padding: 4px; list-style: none; min-width: 120px;
+  background: var(--geo-menu-bg); color: var(--geo-menu-text);
+  border: 1px solid var(--geo-menu-border); border-radius: 8px;
+  box-shadow: var(--geo-menu-shadow); z-index: 10;
+}
+#menu.hidden, #menu2.hidden { display: none; }
+#menu li, #menu2 li { padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+#menu li:hover, #menu2 li:hover { background: var(--geo-menu-hover); }
+
+/* ---------- 右侧控制面板 ---------- */
+#panel {
+  position: absolute; top: 10px; right: 10px;
+  width: var(--geo-panel-width);
+  padding: 8px 9px;
+  background: var(--geo-panel-bg);
+  border: 1px solid var(--geo-panel-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, .10);
+  color: var(--geo-panel-text);
+  font-size: 12px; user-select: none; z-index: 5;
+}
+#panel .panel-title { font-weight: 600; font-size: 12px; margin-bottom: 6px; }
+#panel .panel-label { color: var(--geo-panel-label); font-size: 11px; margin: 7px 0 3px; }
+#panel .seg { display: flex; gap: 3px; }
+#panel .seg button {
+  flex: 1; padding: 4px 0; font-size: 11px;
+  color: var(--geo-panel-btn-text); background: var(--geo-panel-btn-bg);
+  border: 1px solid var(--geo-panel-border); border-radius: 5px; cursor: pointer;
+}
+#panel .seg button.active {
+  color: var(--geo-panel-btn-active-text);
+  background: var(--geo-panel-btn-active-bg);
+  border-color: transparent;
+}
+
+/* ---------- 左下角「说明」按钮 ---------- */
+#btn-help {
+  position: absolute; left: 10px; bottom: 10px;
+  padding: 5px 12px; font-size: 12px;
+  color: var(--geo-panel-text); background: var(--geo-panel-bg);
+  border: 1px solid var(--geo-panel-border); border-radius: 6px;
+  text-decoration: none; box-shadow: 0 2px 8px rgba(16, 24, 40, .08);
+}
+#btn-help:hover { background: var(--geo-panel-btn-bg); }
+
+/* ---------- SVG 元素外观 ---------- */
+/* 网格：三层，越粗越粗（vector-effect 让线宽不随缩放变化） */
+.geo-grid-line { fill: none; stroke: var(--geo-grid); vector-effect: non-scaling-stroke; }
+.geo-grid-1 { stroke-width: .7; opacity: .75; }
+.geo-grid-2 { stroke-width: 1.2; }
+.geo-grid-3 { stroke-width: 2; }
+
+/* 每个点自带颜色 --pt（由 geo.js 就地设置），大小由属性控制 */
+.geo-point { fill: var(--pt, var(--geo-point)); stroke: var(--geo-point-stroke); cursor: grab; }
+.geo-point:hover { stroke: var(--geo-point-hover); }
+.geo-point.is-selected { stroke: var(--geo-point-sel); }
+
+/* 每条边自带颜色 --ec */
+.geo-edge { stroke: var(--ec, var(--geo-edge)); cursor: move; }
+.geo-edge:hover { stroke: var(--geo-edge-hover); }
+
+/* 框选时画的矩形 */
+.geo-marquee {
+  fill: rgba(47, 111, 235, .10);
+  stroke: rgba(47, 111, 235, .65);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+/* 原点 (0,0) 标记 */
+.geo-origin line { stroke: var(--geo-origin, #9aa4b2); stroke-width: 1; }
+.geo-origin text { fill: var(--geo-origin, #9aa4b2); font-size: 10px; }
+
+/* 点的编号文字 */
+.geo-label { fill: var(--geo-label, #667085); font-size: 11px; pointer-events: none; user-select: none; }
+
+/* 凸包轮廓 */
+.geo-hull {
+  stroke: var(--geo-hull-stroke, #f04438);
+  fill: var(--geo-hull-fill, rgba(240, 68, 56, .06));
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 重心标记 */
+.geo-centroid line { stroke: var(--geo-centroid, #7a5af8); stroke-width: 1.5; }
+.geo-centroid circle { fill: var(--geo-centroid, #7a5af8); }
+.geo-centroid text { fill: var(--geo-centroid, #7a5af8); font-size: 11px; }
+
+/* 角度标签 */
+.geo-angle { fill: var(--geo-angle, #b54708); font-size: 11px; pointer-events: none; user-select: none; }
+
+/* 左侧信息窗 */
+#info {
+  position: absolute; top: 10px; left: 10px; width: 196px;
+  padding: 10px 12px;
+  background: var(--geo-panel-bg);
+  border: 1px solid var(--geo-panel-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, .10);
+  color: var(--geo-panel-text);
+  font-size: 12px; z-index: 5;
+}
+#info .info-title { font-weight: 600; margin-bottom: 6px; }
+#info .info-empty { color: var(--geo-panel-label); }
+#info .info-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; }
+#info .info-row > .k { color: var(--geo-panel-label); flex: 0 0 auto; }
+#info .info-row > .v { color: var(--geo-panel-text); text-align: right; }
+#info input { width: 76px; padding: 2px 4px; font-size: 12px; color: var(--geo-panel-text);
+  border: 1px solid var(--geo-panel-border); border-radius: 4px; }
+
+/* 右下角「导入」按钮 */
+#btn-import {
+  position: absolute; right: 10px; bottom: 10px;
+  padding: 6px 16px; font-size: 12px; color: #fff;
+  background: var(--geo-panel-btn-active-bg);
+  border: none; border-radius: 6px; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, .15);
+}
+#btn-import:hover { filter: brightness(1.06); }
+
+/* 导入弹窗 */
+#import-mask {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(16, 24, 40, .45);
+  display: flex; align-items: center; justify-content: center;
+}
+#import-mask.hidden { display: none; }
+#import-box {
+  width: 430px; max-width: 92vw;
+  background: #fff; border-radius: 12px; padding: 18px 20px;
+  box-shadow: 0 16px 48px rgba(16, 24, 40, .30);
+  color: var(--geo-panel-text);
+}
+#import-box .imp-title { font-weight: 600; margin-bottom: 6px; }
+#import-box .imp-label { font-size: 12px; color: #667085; margin: 10px 0 4px; }
+#import-box textarea {
+  width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+  padding: 8px; border: 1px solid var(--geo-panel-border); border-radius: 6px;
+  resize: vertical; color: var(--geo-panel-text);
+}
+#import-box .imp-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+#import-box button {
+  padding: 6px 14px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--geo-panel-border); border-radius: 6px;
+  background: #fff; color: var(--geo-panel-text);
+}
+#import-box button.imp-primary {
+  background: var(--geo-panel-btn-active-bg); color: #fff; border-color: transparent;
+}
+#import-box code { background: #f2f4f7; padding: 0 4px; border-radius: 3px; }

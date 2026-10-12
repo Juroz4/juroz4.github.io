@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>凸包画板</title>
+<link rel="stylesheet" href="style.css?v=16">
+</head>
+<body>
+<div id="app">
+  <header id="toolbar">
+    <span class="geo-title">凸包画板</span>
+
+    <span class="ctl"><span class="ctl-label">点色</span><input type="color" id="col-point"></span>
+    <span class="ctl"><span class="ctl-label">点大小</span><input type="number" id="num-pointsize" min="1" max="40" step="1"></span>
+    <span class="ctl"><span class="ctl-label">边色</span><input type="color" id="col-edge"></span>
+    <span class="ctl"><span class="ctl-label">边粗细</span><input type="number" id="num-edgewidth" min="1" max="20" step="1"></span>
+    <span class="ctl-target" id="ctl-target">新对象</span>
+
+    <button id="btn-clear" class="geo-danger">清空</button>
+  </header>
+
+  <div id="stage">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+      <g id="viewport">
+        <g id="layer-grid"></g>
+        <g id="layer-edges"></g>
+        <g id="layer-hull"></g>
+      </g>
+      <g id="layer-origin"></g>
+      <g id="layer-points"></g>
+      <g id="layer-labels"></g>
+      <g id="layer-ui"></g>
+    </svg>
+
+    <aside id="info">
+      <div class="info-title">信息</div>
+      <div id="info-body" class="info-empty">未选中任何对象</div>
+    </aside>
+
+    <aside id="panel">
+      <div class="panel-title">拖动空白</div>
+      <div class="seg" id="seg-dragmode">
+        <button type="button" data-mode="select">选中</button>
+        <button type="button" data-mode="pan">平移</button>
+        <button type="button" data-mode="rotate">旋转</button>
+      </div>
+    </aside>
+
+    <a id="btn-help" href="help.html">说明</a>
+    <button id="btn-import">导入</button>
+
+    <ul id="menu" class="hidden"></ul>
+    <ul id="menu2" class="hidden"></ul>
+  </div>
+</div>
+
+<div id="import-mask" class="hidden">
+  <div id="import-box">
+    <div class="imp-title">导入</div>
+
+    <div class="imp-label">点：每行 <code>x y</code>，编号按行序 1…n</div>
+    <textarea id="imp-points" rows="7" placeholder="0 0&#10;100 0&#10;50 80"></textarea>
+
+    <div class="imp-label">边：每行 <code>u v</code>（填上面点的编号；可空）</div>
+    <textarea id="imp-edges" rows="5" placeholder="1 2&#10;2 3&#10;3 1"></textarea>
+
+    <div class="imp-actions">
+      <button id="imp-replace" class="imp-primary">覆盖导入</button>
+      <button id="imp-append">追加导入</button>
+      <button id="imp-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js?v=16"></script>
+<script src="geo.js?v=16"></script>
+</body>
+</html>

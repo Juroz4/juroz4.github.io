@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>凸包画板 · 说明</title>
+<style>
+  body { margin: 0; padding: 32px 16px; background: #f4f6fb;
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #344054; line-height: 1.75; }
+  .wrap { max-width: 720px; margin: 0 auto; background: #fff;
+    border: 1px solid #e4e9f2; border-radius: 12px; padding: 28px 32px; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  h2 { font-size: 16px; margin: 26px 0 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #e4e9f2; padding: 8px 10px; text-align: left; }
+  th { background: #f7f9fc; }
+  kbd { background: #f2f4f7; border: 1px solid #e4e9f2; border-radius: 4px;
+    padding: 1px 6px; font-size: 12px; }
+  a.back { display: inline-block; margin-top: 22px; color: #2f6feb; text-decoration: none; }
+  a.back:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>凸包画板 · 说明</h1>
+  <p>在网页上随手放点、连线、拖拽、删除、改颜色大小的小工具，后续会加「一键画凸包」和 3D。</p>
+
+  <h2>基本操作</h2>
+  <table>
+    <tr><th>操作</th><th>效果</th></tr>
+    <tr><td>单击空白</td><td>弹出小菜单：添加点 / 取消选中</td></tr>
+    <tr><td>单击点 A，再单击点 B</td><td>在两点之间连一条边</td></tr>
+    <tr><td>拖动点 / 边</td><td>移动；若该点/边已被选中，则<b>整组一起移动</b></td></tr>
+    <tr><td><b>拖动空白</b></td><td>按右侧面板的模式：<b>框选</b> / 平移 / 旋转</td></tr>
+    <tr><td>右键 <b>点 / 边</b></td><td>弹出菜单（对<b>选中</b>的对象操作）</td></tr>
+    <tr><td>右键空白</td><td>取消选中</td></tr>
+    <tr><td>选中后按 <kbd>Del</kbd></td><td><b>删除</b>选中的点 / 边（<kbd>Del</kbd> 或 <kbd>Backspace</kbd>）</td></tr>
+    <tr><td>滚轮</td><td>缩放（以鼠标位置为中心）</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>取消选中 / 收起菜单</td></tr>
+  </table>
+
+  <h2>原点与编号</h2>
+  <ul>
+    <li>画面中心有 <b>原点 (0,0)</b> 标记，随视图平移/旋转。</li>
+    <li>每个点旁边显示它的<b>编号</b>；手动新建的点从 1 起自动编号，导入的点按导入时的行序编号。</li>
+  </ul>
+
+  <h2>左侧信息窗</h2>
+  <ul>
+    <li>选中<b>一个点</b>：显示 编号（可改）、坐标、染色。</li>
+    <li>选中<b>一条边</b>：显示 端点、容量（可改）、流量（可改）。</li>
+    <li>多选时显示选中数量。这些字段是为以后加算法（最短路、网络流、二分图染色…）预留的。</li>
+  </ul>
+
+  <h2>导入（右下角按钮）</h2>
+  <ul>
+    <li><b>点</b>：每行 <code>x y</code>，编号按行序 1…n。</li>
+    <li><b>边</b>：每行 <code>u v</code>，u、v 就是上面点的编号。</li>
+    <li>导入后会自动缩放到刚好装下所有点。</li>
+    <li><b>覆盖导入</b> = 清空后导入；<b>追加导入</b> = 加到现有画板上（新点编号接着往下排）。</li>
+  </ul>
+
+  <h2>右键菜单（对着 <b>点 / 边</b> 右键）</h2>
+  <p>菜单里的<b>所有操作都只作用于「选中的」目标</b>。右键一个没被选中的对象，会先把它选上。</p>
+  <ul>
+    <li><b>求凸包</b>：对<b>选中的点</b>求凸包，并把相邻顶点连成<b>真实的边</b>（用凸包色；同样能参与求角度）。C++ 实现。</li>
+    <li><b>求重心</b>：<b>选中的点</b>的重心，生成一个新点。C++ 实现。</li>
+    <li><b>显示 / 隐藏角度</b>：在<b>选中的顶点</b>处显示相邻两边的夹角（度 + 弧度）。</li>
+    <li><b>删除所有边</b>：删掉<b>选中的边</b>。</li>
+    <li><b>删除所有</b>：删掉<b>选中的点 + 边</b>。</li>
+  </ul>
+  <p>右键空白则是「取消选中」。</p>
+
+  <h2>右侧面板 · 拖动空白</h2>
+  <ul>
+    <li><kbd>选中</kbd>（默认）：拖动空白画一个方框，<b>框住</b>的点、边会被选中（边的两端都在框内才算）。</li>
+    <li><kbd>平移</kbd>：拖动空白平移视图。</li>
+    <li><kbd>旋转</kbd>：拖动空白旋转视图，以「屏幕中心」（当前可视范围中心）为轴。</li>
+  </ul>
+
+  <h2>顶部工具栏 · 颜色与大小</h2>
+  <ul>
+    <li>四个控件：<b>点色</b>、<b>点大小</b>、<b>边色</b>、<b>边粗细</b>。</li>
+    <li><b>没选中对象时</b>：改的是「新对象」的默认样式 —— 之后新建的点/边就用这个颜色和大小。</li>
+    <li><b>选中对象后</b>：改的是<b>选中的那些</b>对象；可以框选多个一起统一改。</li>
+    <li>控件右边的小字会显示当前作用对象：<code>新对象</code> 或 <code>选中 N 点 M 边</code>。</li>
+  </ul>
+
+  <h2>清空</h2>
+  <p>顶部「清空」会移除所有点和边，需要二次确认，防止误触。</p>
+
+  <h2>以后会加</h2>
+  <ul>
+    <li>一键计算并绘制凸包</li>
+    <li>3D 模式</li>
+  </ul>
+
+  <a class="back" href="./">← 返回画板</a>
+</div>
+</body>
+</html>
