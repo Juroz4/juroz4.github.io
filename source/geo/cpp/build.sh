@@ -14,6 +14,8 @@ ZIG="${ZIG:-zig}"
   -Wl,--no-entry \
   -Wl,--export=convex_hull -Wl,--export=centroid \
   -Wl,--export=geo_pts -Wl,--export=geo_hull -Wl,--export=geo_cen \
+  -Wl,--export=max_flow -Wl,--export=geo_set \
+  -Wl,--export=geo_efrom -Wl,--export=geo_eto -Wl,--export=geo_ecap -Wl,--export=geo_flow \
   -o ../geo.wasm geo.cpp
 
 echo "编译完成：../geo.wasm"

@@ -21,6 +21,7 @@
   var layerHull   = document.getElementById('layer-hull');
   var layerOrigin = document.getElementById('layer-origin');
   var layerPoints = document.getElementById('layer-points');
+  var layerArrows = document.getElementById('layer-arrows');
   var layerLabels = document.getElementById('layer-labels');
   var layerUI     = document.getElementById('layer-ui');
   var menu        = document.getElementById('menu');
@@ -113,6 +114,51 @@
   // 菜单里所有操作的对象 = 「选中的」目标
   function targetPoints() { return S.sel.points.map(getPoint).filter(function (p) { return !!p; }); }
   function targetEdges() { return S.sel.edges.map(getEdge).filter(function (e) { return !!e; }); }
+  // 有源点/汇点时，边显示方向箭头
+  function arrowsOn() {
+    for (var i = 0; i < S.points.length; i++) { if (S.points[i].role) { return true; } }
+    return false;
+  }
+  // 设源点/汇点（各自只有一个）
+  function setRole(id, role) {
+    if (role) { S.points.forEach(function (p) { if (p.role === role) { p.role = ''; } }); }
+    var p = getPoint(id);
+    if (p) { p.role = role; }
+    render();
+  }
+  // 单源单汇最大流（C++/Dinic）
+  function runMaxFlow() {
+    var si = -1, ti = -1;
+    S.points.forEach(function (p, i) { if (p.role === 's') { si = i; } if (p.role === 't') { ti = i; } });
+    if (si < 0 || ti < 0) { toast('请先指定源点和汇点'); return; }
+    if (!ALGO) { toast('WASM 未加载，无法计算'); return; }
+    var idx = {};
+    S.points.forEach(function (p, i) { idx[p.id] = i; });
+    var eds = S.edges.filter(function (e) { return idx[e.from] != null && idx[e.to] != null; });
+    var m = eds.length, i;
+    var i32 = new Int32Array(ALGO.memory.buffer), f64 = new Float64Array(ALGO.memory.buffer);
+    var pf = ALGO.geo_efrom(), pt = ALGO.geo_eto(), pc = ALGO.geo_ecap(), pfl = ALGO.geo_flow();
+    for (i = 0; i < m; i++) {
+      i32[(pf >> 2) + i] = idx[eds[i].from];
+      i32[(pt >> 2) + i] = idx[eds[i].to];
+      f64[(pc >> 3) + i] = +eds[i].cap || 0;
+    }
+    ALGO.geo_set(S.points.length, m, si, ti);
+    var mf = ALGO.max_flow();
+    for (i = 0; i < m; i++) {
+      eds[i].flow = Math.round(f64[(pfl >> 3) + i] * 1e6) / 1e6;
+    }
+    render();
+    toast('最大流 = ' + (Math.round(mf * 1e6) / 1e6));
+  }
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('geo-toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    if (toastTimer) { clearTimeout(toastTimer); }
+    toastTimer = setTimeout(function () { t.classList.add('hidden'); }, 3200);
+  }
   function runHull() {
     var pts = targetPoints();
     if (pts.length < 2) { return; }
@@ -195,6 +241,26 @@
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function fmt(n) { return (Math.round(n * 100) / 100); }
   function rnd4(n) { return Math.round(n * 10000) / 10000; }
+
+  // 两条线段是否相交（屏幕坐标）
+  function segSeg(p1, p2, p3, p4) {
+    function d(px, py, qx, qy, rx, ry) { return (qx - px) * (ry - py) - (qy - py) * (rx - px); }
+    var d1 = d(p3.x, p3.y, p4.x, p4.y, p1.x, p1.y);
+    var d2 = d(p3.x, p3.y, p4.x, p4.y, p2.x, p2.y);
+    var d3 = d(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+    var d4 = d(p1.x, p1.y, p2.x, p2.y, p4.x, p4.y);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  }
+  // 线段是否与矩形相交（端点在内，或穿过任一条边）
+  function segRectHit(a, b, x0, y0, x1, y1) {
+    var ain = a.x >= x0 && a.x <= x1 && a.y >= y0 && a.y <= y1;
+    var bin = b.x >= x0 && b.x <= x1 && b.y >= y0 && b.y <= y1;
+    if (ain || bin) { return true; }
+    return segSeg(a, b, { x: x0, y: y0 }, { x: x1, y: y0 }) ||
+           segSeg(a, b, { x: x1, y: y0 }, { x: x1, y: y1 }) ||
+           segSeg(a, b, { x: x1, y: y1 }, { x: x0, y: y1 }) ||
+           segSeg(a, b, { x: x0, y: y1 }, { x: x0, y: y0 });
+  }
   function center() { return { x: stage.clientWidth / 2, y: stage.clientHeight / 2 }; }
   function getPoint(id) {
     for (var i = 0; i < S.points.length; i++) { if (S.points[i].id === id) { return S.points[i]; } }
@@ -212,13 +278,14 @@
     var c = Math.cos(rot), n = Math.sin(rot);
     return { x: (x * c - y * n) * s, y: (x * n + y * c) * s };
   }
+  // 世界坐标 y 向上、屏幕 y 向下，所以映射里把 y 翻一下
   function worldToScreen(x, y) {
     var v = S.view, k = center(), r = rotScale(x, y, v.scale, v.rot);
-    return { x: k.x + v.panX + r.x, y: k.y + v.panY + r.y };
+    return { x: k.x + v.panX + r.x, y: k.y + v.panY - r.y };
   }
   function screenToWorld(sx, sy) {
     var v = S.view, k = center();
-    var dx = sx - k.x - v.panX, dy = sy - k.y - v.panY;
+    var dx = sx - k.x - v.panX, dy = -(sy - k.y - v.panY);
     var c = Math.cos(-v.rot), n = Math.sin(-v.rot);
     return { x: (dx * c - dy * n) / v.scale, y: (dx * n + dy * c) / v.scale };
   }
@@ -255,6 +322,11 @@
     r.setProperty('--geo-hull-fill', T.hull.fill);
     r.setProperty('--geo-centroid', T.centroid.color);
     r.setProperty('--geo-angle', T.angle.color);
+    r.setProperty('--geo-src', T.src.color);
+    r.setProperty('--geo-snk', T.snk.color);
+    r.setProperty('--geo-arrow', T.arrow.fill);
+    r.setProperty('--geo-axis-x', T.axis.x);
+    r.setProperty('--geo-axis-y', T.axis.y);
   }
 
   // ---------------- 原点 (0,0) ----------------
@@ -269,6 +341,30 @@
   originMark.appendChild(originText);
   layerOrigin.appendChild(originMark);
 
+  // 初始 x/y 坐标轴：长度 = T.axis.len（世界单位），在屏幕层画，粗细/箭头大小恒定
+  var AX = T.axis;
+  var axisXL = el('line', { 'class': 'geo-axis geo-axis-x' });
+  var axisXA = el('polygon', { 'class': 'geo-axis-head-x' });
+  var axisXT = el('text', { 'class': 'geo-axis-label geo-axis-label-x' }); axisXT.textContent = 'x';
+  var axisYL = el('line', { 'class': 'geo-axis geo-axis-y' });
+  var axisYA = el('polygon', { 'class': 'geo-axis-head-y' });
+  var axisYT = el('text', { 'class': 'geo-axis-label geo-axis-label-y' }); axisYT.textContent = 'y';
+  layerOrigin.appendChild(axisXL); layerOrigin.appendChild(axisXA); layerOrigin.appendChild(axisXT);
+  layerOrigin.appendChild(axisYL); layerOrigin.appendChild(axisYA); layerOrigin.appendChild(axisYT);
+
+  function drawAxis(o, e, line, arrow, label) {
+    line.setAttribute('x1', o.x); line.setAttribute('y1', o.y);
+    line.setAttribute('x2', e.x); line.setAttribute('y2', e.y);
+    var dx = e.x - o.x, dy = e.y - o.y, len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 3) { arrow.setAttribute('points', ''); label.setAttribute('x', e.x); label.setAttribute('y', e.y); return; }
+    var ux = dx / len, uy = dy / len;
+    var t = Math.min(10, len * 0.4), w = t * 0.5;
+    var bx = e.x - ux * t, by = e.y - uy * t, px = -uy * w, py = ux * w;
+    arrow.setAttribute('points', e.x + ',' + e.y + ' ' + (bx + px) + ',' + (by + py) + ' ' + (bx - px) + ',' + (by - py));
+    label.setAttribute('x', e.x + ux * 13);
+    label.setAttribute('y', e.y + uy * 13 + 4);
+  }
+
   // 凸包不再单独画轮廓，改成生成真实的边（见 runHull）
 
   // 重心现在直接生成一个"点"（见 runCentroid）
@@ -278,10 +374,19 @@
     var v = S.view, k = center();
     var deg = v.rot * 180 / Math.PI;
     viewport.setAttribute('transform',
-      'translate(' + (k.x + v.panX) + ' ' + (k.y + v.panY) + ') rotate(' + deg + ') scale(' + v.scale + ')');
+      'translate(' + (k.x + v.panX) + ' ' + (k.y + v.panY) + ') scale(1 -1) rotate(' + deg + ') scale(' + v.scale + ')');
 
     var o = worldToScreen(0, 0);
     originMark.setAttribute('transform', 'translate(' + o.x + ' ' + o.y + ')');
+    if (B.showAxes) {
+      drawAxis(o, worldToScreen(AX.len, 0), axisXL, axisXA, axisXT);
+      drawAxis(o, worldToScreen(0, AX.len), axisYL, axisYA, axisYT);
+    } else {
+      axisXA.setAttribute('points', ''); axisYA.setAttribute('points', '');
+      axisXT.textContent = ''; axisYT.textContent = '';
+      axisXL.setAttribute('x2', o.x); axisXL.setAttribute('y2', o.y);
+      axisYL.setAttribute('x2', o.x); axisYL.setAttribute('y2', o.y);
+    }
 
     // 点、编号放在不缩放的层：位置世界->屏幕，大小恒定
     S.points.forEach(function (p) {
@@ -296,17 +401,37 @@
         p._label.setAttribute('x', s.x + 9);
         p._label.setAttribute('y', s.y - 9);
       }
+      if (p._role) {
+        p._role.setAttribute('cx', s.x);
+        p._role.setAttribute('cy', s.y);
+        p._role.setAttribute('r', p.size + 5);
+      }
     });
-    // 边在缩放层：粗细除以缩放保持恒定
+    // 边在缩放层：粗细除以缩放保持恒定；方向箭头在屏幕层，大小恒定
     S.edges.forEach(function (e) {
-      if (!e._el) { return; }
-      e._el.setAttribute('stroke-width', (isSelEdge(e.id) ? e.width * 2 : e.width) / v.scale);
+      if (e._el) {
+        e._el.setAttribute('stroke-width', (isSelEdge(e.id) ? e.width * 2 : e.width) / v.scale);
+      }
+      if (e._arrow) {
+        var a = getPoint(e.from), b = getPoint(e.to);
+        if (!a || !b) { e._arrow.setAttribute('points', ''); return; }
+        var sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
+        var dx = sb.x - sa.x, dy = sb.y - sa.y, len = Math.sqrt(dx * dx + dy * dy);
+        var back = (b.size || 6) + 4;
+        if (len - back < 5) { e._arrow.setAttribute('points', ''); return; }
+        var ux = dx / len, uy = dy / len;
+        var tx = sb.x - ux * back, ty = sb.y - uy * back;
+        var tl = 9, tw = 4.5;
+        var bx = tx - ux * tl, by = ty - uy * tl, px = -uy * tw, py = ux * tw;
+        e._arrow.setAttribute('points',
+          tx + ',' + ty + ' ' + (bx + px) + ',' + (by + py) + ' ' + (bx - px) + ',' + (by - py));
+      }
     });
 
     // 角度标签（屏幕层，沿角平分线方向偏移固定像素）
     S.angleItems.forEach(function (it) {
       var s = worldToScreen(it.px, it.py);
-      var d = it.dir + v.rot;
+      var d = -it.dir - v.rot;             // 屏幕 y 翻转，方向也翻
       it.el.setAttribute('x', s.x + Math.cos(d) * 30);
       it.el.setAttribute('y', s.y + Math.sin(d) * 30);
     });
@@ -359,6 +484,8 @@
   // ---------------- 渲染 ----------------
   function render() {
     layerEdges.innerHTML = '';
+    layerArrows.innerHTML = '';
+    var withArrows = arrowsOn();
     S.edges.forEach(function (e) {
       var a = getPoint(e.from), b = getPoint(e.to);
       if (!a || !b) { return; }
@@ -368,6 +495,12 @@
       ln.dataset.edgeId = e.id;
       e._el = ln;
       layerEdges.appendChild(ln);
+
+      if (withArrows) {
+        var ap = el('polygon', { 'class': 'geo-arrow' });
+        layerArrows.appendChild(ap);
+        e._arrow = ap;
+      } else { e._arrow = null; }
     });
 
     layerPoints.innerHTML = '';
@@ -381,9 +514,15 @@
       layerPoints.appendChild(c);
 
       var t = el('text', { 'class': 'geo-label' });
-      t.textContent = p.label;
+      t.textContent = p.label + (p.role === 's' ? ' (S)' : (p.role === 't' ? ' (T)' : ''));
       p._label = t;
       layerLabels.appendChild(t);
+
+      if (p.role) {
+        var rg = el('circle', { 'class': 'geo-role', 'data-role': p.role });
+        layerLabels.appendChild(rg);
+        p._role = rg;
+      } else { p._role = null; }
     });
 
     // 角度标签
@@ -405,7 +544,7 @@
 
   // ---------------- 数据操作 ----------------
   function addPoint(x, y) {
-    var p = { id: S.nextPointId++, x: x, y: y, label: S.nextLabel++, side: '', color: S.style.pointColor, size: S.style.pointSize };
+    var p = { id: S.nextPointId++, x: x, y: y, label: S.nextLabel++, side: '', role: '', color: S.style.pointColor, size: S.style.pointSize };
     S.points.push(p);
     render();
     return p;
@@ -512,8 +651,44 @@
       if (!p) { return; }
       infoBody.appendChild(infoRow('类型', '点'));
       infoBody.appendChild(infoRow('编号', infoInput(p.label, function (v) { p.label = v; if (p._label) { p._label.textContent = v; } }, 'number')));
-      infoBody.appendChild(infoRow('坐标', fmt(p.x) + ', ' + fmt(p.y)));
+
+      // 坐标可改：输入后回车（或失焦）即应用
+      var cx = document.createElement('input');
+      var cy = document.createElement('input');
+      cx.type = 'number'; cy.type = 'number';
+      cx.step = 'any'; cy.step = 'any';
+      cx.className = 'coord'; cy.className = 'coord';
+      cx.value = rnd4(p.x); cy.value = rnd4(p.y);
+      cx.title = cy.title = '改完按回车应用';
+      function commitCoord() {
+        var vx = parseFloat(cx.value), vy = parseFloat(cy.value);
+        if (isFinite(vx)) { p.x = vx; }
+        if (isFinite(vy)) { p.y = vy; }
+        render();
+      }
+      cx.addEventListener('change', commitCoord);
+      cy.addEventListener('change', commitCoord);
+      cx.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { commitCoord(); } });
+      cy.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { commitCoord(); } });
+      var coordWrap = document.createElement('span');
+      coordWrap.className = 'coord-wrap';
+      coordWrap.appendChild(cx);
+      coordWrap.appendChild(cy);
+      infoBody.appendChild(infoRow('坐标', coordWrap));
       infoBody.appendChild(infoRow('染色', infoInput(p.side, function (v) { p.side = v; })));
+
+      var roleWrap = document.createElement('span');
+      roleWrap.className = 'role-wrap';
+      var bS = document.createElement('button');
+      bS.type = 'button'; bS.textContent = '源点';
+      bS.className = 'role' + (p.role === 's' ? ' on-s' : '');
+      bS.addEventListener('click', function () { setRole(p.id, p.role === 's' ? '' : 's'); });
+      var bT = document.createElement('button');
+      bT.type = 'button'; bT.textContent = '汇点';
+      bT.className = 'role' + (p.role === 't' ? ' on-t' : '');
+      bT.addEventListener('click', function () { setRole(p.id, p.role === 't' ? '' : 't'); });
+      roleWrap.appendChild(bS); roleWrap.appendChild(bT);
+      infoBody.appendChild(infoRow('角色', roleWrap));
       return;
     }
     if (ne === 1 && np === 0) {
@@ -522,7 +697,7 @@
       var a = getPoint(e.from), b = getPoint(e.to);
       infoBody.appendChild(infoRow('类型', '边'));
       infoBody.appendChild(infoRow('编号', '#' + e.id));
-      infoBody.appendChild(infoRow('端点', (a ? a.label : '?') + ' — ' + (b ? b.label : '?')));
+      infoBody.appendChild(infoRow('方向', (a ? a.label : '?') + ' → ' + (b ? b.label : '?')));
       infoBody.appendChild(infoRow('容量', infoInput(e.cap, function (v) { e.cap = parseFloat(v) || 0; }, 'number')));
       infoBody.appendChild(infoRow('流量', infoInput(e.flow, function (v) { e.flow = parseFloat(v) || 0; }, 'number')));
       return;
@@ -567,6 +742,7 @@
     return [
       { label: '求凸包',       run: runHull },
       { label: '求重心',       run: runCentroid },
+      { label: '求最大流',     run: runMaxFlow },
       { label: (S.showAngles ? '隐藏角度' : '显示角度'), run: toggleAngles },
       { label: '删除所有边',   run: runClearEdges },
       { label: '删除所有',     run: runDeleteSelected }
@@ -666,7 +842,7 @@
         var r1 = Math.atan2(q.y - k.y, q.x - k.x);
         var da = r1 - r0;
         if (da > Math.PI) { da -= Math.PI * 2; } else if (da < -Math.PI) { da += Math.PI * 2; }
-        S.view.rot += da;
+        S.view.rot -= da;              // 世界 y 向上、屏幕 y 向下，旋转方向取反才跟手
         var cs = Math.cos(da), sn = Math.sin(da);
         var px = S.view.panX, py = S.view.panY;
         S.view.panX = px * cs - py * sn; S.view.panY = px * sn + py * cs;
@@ -691,16 +867,24 @@
         hideMarquee();
         var x0 = Math.min(drag.sx, q.x), x1 = Math.max(drag.sx, q.x);
         var y0 = Math.min(drag.sy, q.y), y1 = Math.max(drag.sy, q.y);
+        var spr = {};
+        S.points.forEach(function (p) { spr[p.id] = worldToScreen(p.x, p.y); });
         S.sel.points = S.points.filter(function (p) {
-          var s = worldToScreen(p.x, p.y);
+          var s = spr[p.id];
           return s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
         }).map(function (p) { return p.id; });
+        var gotPoints = S.sel.points.length > 0;
         S.sel.edges = S.edges.filter(function (ed) {
           var a = getPoint(ed.from), b = getPoint(ed.to);
           if (!a || !b) { return false; }
-          var sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
-          return sa.x >= x0 && sa.x <= x1 && sa.y >= y0 && sa.y <= y1 &&
-                 sb.x >= x0 && sb.x <= x1 && sb.y >= y0 && sb.y <= y1;
+          var sa = spr[ed.from], sb = spr[ed.to];
+          if (gotPoints) {
+            // 框里有点：边要整条落在框内才算
+            return sa.x >= x0 && sa.x <= x1 && sa.y >= y0 && sa.y <= y1 &&
+                   sb.x >= x0 && sb.x <= x1 && sb.y >= y0 && sb.y <= y1;
+          }
+          // 框里没点：只要框"经过"这条边就算选中（方便选边）
+          return segRectHit(sa, sb, x0, y0, x1, y1);
         }).map(function (ed) { return ed.id; });
         render();
       }
@@ -803,7 +987,7 @@
     var labelToId = {};
     pts.forEach(function (p, i) {
       var label = base + i + 1;
-      var pt = { id: S.nextPointId++, x: p[0], y: p[1], label: label, side: '', color: S.style.pointColor, size: S.style.pointSize };
+      var pt = { id: S.nextPointId++, x: p[0], y: p[1], label: label, side: '', role: '', color: S.style.pointColor, size: S.style.pointSize };
       S.points.push(pt);
       labelToId[label] = pt.id;
     });

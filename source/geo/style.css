@@ -175,9 +175,46 @@ body {
 /* 角度标签 */
 .geo-angle { fill: var(--geo-angle, #b54708); font-size: 11px; pointer-events: none; user-select: none; }
 
+/* 初始 x/y 坐标轴 */
+.geo-axis { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.geo-axis-x { stroke: var(--geo-axis-x, #e8590c); }
+.geo-axis-y { stroke: var(--geo-axis-y, #12b76a); }
+.geo-axis-head-x { fill: var(--geo-axis-x, #e8590c); }
+.geo-axis-head-y { fill: var(--geo-axis-y, #12b76a); }
+.geo-axis-label { font-size: 11px; font-weight: 600; }
+.geo-axis-label-x { fill: var(--geo-axis-x, #e8590c); }
+.geo-axis-label-y { fill: var(--geo-axis-y, #12b76a); }
+
+/* 源点 / 汇点 的圈 */
+.geo-role { fill: none; stroke-width: 2.5; pointer-events: none; }
+.geo-role[data-role="s"] { stroke: var(--geo-src, #12b76a); }
+.geo-role[data-role="t"] { stroke: var(--geo-snk, #f04438); }
+
+/* 边的方向箭头（屏幕层，大小恒定） */
+.geo-arrow { fill: var(--geo-arrow, #98a2b3); pointer-events: none; }
+
+/* 信息窗里的「源点 / 汇点」按钮 */
+#info .role {
+  padding: 2px 8px; font-size: 11px; cursor: pointer;
+  border: 1px solid var(--geo-panel-border); border-radius: 5px;
+  background: var(--geo-panel-btn-bg); color: var(--geo-panel-btn-text);
+}
+#info .role-wrap { display: inline-flex; gap: 4px; }
+#info .role.on-s { background: var(--geo-src, #12b76a); color: #fff; border-color: transparent; }
+#info .role.on-t { background: var(--geo-snk, #f04438); color: #fff; border-color: transparent; }
+
+/* 结果提示 */
+#geo-toast {
+  position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%);
+  padding: 8px 18px; font-size: 14px; font-weight: 600; color: #fff;
+  background: rgba(16, 24, 40, .88); border-radius: 8px; z-index: 20;
+  pointer-events: none; box-shadow: 0 6px 20px rgba(16, 24, 40, .25);
+}
+#geo-toast.hidden { display: none; }
+
 /* 左侧信息窗 */
 #info {
-  position: absolute; top: 10px; left: 10px; width: 196px;
+  position: absolute; top: 10px; left: 10px; width: 214px;
   padding: 10px 12px;
   background: var(--geo-panel-bg);
   border: 1px solid var(--geo-panel-border);
@@ -193,6 +230,8 @@ body {
 #info .info-row > .v { color: var(--geo-panel-text); text-align: right; }
 #info input { width: 76px; padding: 2px 4px; font-size: 12px; color: var(--geo-panel-text);
   border: 1px solid var(--geo-panel-border); border-radius: 4px; }
+#info input.coord { width: 54px; }
+#info .coord-wrap { display: inline-flex; gap: 4px; }
 
 /* 右下角「导入」按钮 */
 #btn-import {

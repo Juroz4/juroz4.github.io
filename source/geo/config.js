@@ -61,7 +61,11 @@ window.GEO.config = {
     label:  { fill: '#667085' },   // 点旁边的编号文字
     origin: { color: '#9aa4b2' },  // 原点(0,0)标记
     centroid: { color: '#7a5af8' },// 重心标记
-    angle:    { color: '#b54708' } // 角度标签
+    angle:    { color: '#b54708' },// 角度标签
+    src:   { color: '#12b76a' },   // 源点圈
+    snk:   { color: '#f04438' },   // 汇点圈
+    arrow: { fill: '#98a2b3' },    // 边的方向箭头
+    axis:  { x: '#e8590c', y: '#12b76a', len: 100 }  // 初始 x/y 坐标轴（长 100 世界单位）
   },
 
   /* ---------------- 交互参数 ---------------- */
@@ -72,6 +76,7 @@ window.GEO.config = {
     zoomMax:         1000,   // 最大缩放（要能看到 0.1 的格子，就得放得足够大）
     dragMode:        'select', // 拖动空白时默认模式：'select'(框选) | 'pan'(平移) | 'rotate'(旋转)
     showGrid:        true,   // 是否显示网格
+    showAxes:        true,   // 是否显示初始 x/y 坐标轴
     grid: {
       base:      0.1, // 最细网格单位：每隔 base、10*base、100*base… 画，逐级加粗
       minGap:    8,   // 某层网格的屏幕间距小于这个像素数就隐藏（太密不画）
