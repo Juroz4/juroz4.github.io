@@ -15,10 +15,8 @@
 
   var stage       = document.getElementById('stage');
   var svg         = document.getElementById('canvas');
-  var viewport    = document.getElementById('viewport');
   var layerGrid   = document.getElementById('layer-grid');
   var layerEdges  = document.getElementById('layer-edges');
-  var layerHull   = document.getElementById('layer-hull');
   var layerOrigin = document.getElementById('layer-origin');
   var layerPoints = document.getElementById('layer-points');
   var layerArrows = document.getElementById('layer-arrows');
@@ -27,6 +25,7 @@
   var menu        = document.getElementById('menu');
   var menu2       = document.getElementById('menu2');
   var btnClear    = document.getElementById('btn-clear');
+  var btnMode     = document.getElementById('btn-mode');
   var panel       = document.getElementById('panel');
   var segDrag     = document.getElementById('seg-dragmode');
   var colPoint    = document.getElementById('col-point');
@@ -50,7 +49,12 @@
     nextPointId: 1,
     nextEdgeId: 1,
     nextLabel: 1,          // 下一个自动编号
-    view: { scale: 1, rot: 0, panX: 0, panY: 0 },
+    mode: B.mode || '2d',        // '2d' | '3d'
+    view: {
+      scale: 1, rot: 0, panX: 0, panY: 0,
+      yaw: (B.yaw || 0) * Math.PI / 180,
+      pitch: (B.pitch || 0) * Math.PI / 180
+    },
     dragMode: B.dragMode || 'select',
     style: { pointColor: T.point.fill, pointSize: T.point.radius, edgeColor: T.edge.stroke, edgeWidth: T.edge.width },
     hull: [],              // 凸包顶点（point id，有序）
@@ -220,12 +224,12 @@
       if (d.length === 2) {
         var gap = d[1] - d[0];
         if (gap > Math.PI) { gap = Math.PI * 2 - gap; }
-        out.push({ px: p.x, py: p.y, ang: gap, dir: d[0] + gap / 2 });
+        out.push({ px: p.x, py: p.y, pz: p.z || 0, ang: gap, dir: d[0] + gap / 2 });
       } else {
         for (var i = 0; i < d.length; i++) {
           var j = (i + 1) % d.length;
           var g = d[j] - d[i]; if (g < 0) { g += Math.PI * 2; }
-          out.push({ px: p.x, py: p.y, ang: g, dir: d[i] + g / 2 });
+          out.push({ px: p.x, py: p.y, pz: p.z || 0, ang: g, dir: d[i] + g / 2 });
         }
       }
     });
@@ -278,16 +282,54 @@
     var c = Math.cos(rot), n = Math.sin(rot);
     return { x: (x * c - y * n) * s, y: (x * n + y * c) * s };
   }
-  // 世界坐标 y 向上、屏幕 y 向下，所以映射里把 y 翻一下
-  function worldToScreen(x, y) {
-    var v = S.view, k = center(), r = rotScale(x, y, v.scale, v.rot);
-    return { x: k.x + v.panX + r.x, y: k.y + v.panY - r.y };
+  // 3D：先绕 Y 轴 yaw、再绕 X 轴 pitch，然后正交投影（单加/俯仰）
+  function rot3d(x, y, z) {
+    var v = S.view;
+    var cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
+    var x1 = x * cy + z * sy;
+    var z1 = -x * sy + z * cy;
+    var cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
+    return { x: x1, y: y * cp - z1 * sp, z: y * sp + z1 * cp };
   }
-  function screenToWorld(sx, sy) {
+  // 世界坐标 y 向上、屏幕 y 向下：投影时把 y 翻一下
+  function worldToScreen(x, y, z) {
     var v = S.view, k = center();
-    var dx = sx - k.x - v.panX, dy = -(sy - k.y - v.panY);
+    if (S.mode === '3d') {
+      var p = rot3d(x, y, z || 0);
+      return { x: k.x + v.panX + p.x * v.scale, y: k.y + v.panY - p.y * v.scale, z: p.z };
+    }
+    var r = rotScale(x, y, v.scale, v.rot);
+    return { x: k.x + v.panX + r.x, y: k.y + v.panY - r.y, z: 0 };
+  }
+  // 屏幕位移 → 世界位移（拖动点/边用；3D 下沿"平行于屏幕"的平面移动）
+  function screenDeltaToWorld(dsx, dsy) {
+    var v = S.view;
+    if (S.mode === '3d') {
+      var a = dsx / v.scale, b = -dsy / v.scale;        // 相机坐标下的位移
+      var cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
+      var x1 = a, y1 = b * cp, z1 = -b * sp;            // 反 pitch
+      var cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
+      return { x: x1 * cy - z1 * sy, y: y1, z: x1 * sy + z1 * cy };  // 反 yaw
+    }
+    var dx = dsx / v.scale, dy = -dsy / v.scale;
     var c = Math.cos(-v.rot), n = Math.sin(-v.rot);
-    return { x: (dx * c - dy * n) / v.scale, y: (dx * n + dy * c) / v.scale };
+    return { x: dx * c - dy * n, y: dx * n + dy * c, z: 0 };
+  }
+  // 屏幕上某点对应到 z=0 平面上的世界点（网格/落点用）
+  function unprojectToZ0(sx, sy) {
+    var v = S.view, k = center();
+    var a = (sx - k.x - v.panX) / v.scale;
+    var b = -(sy - k.y - v.panY) / v.scale;
+    if (S.mode !== '3d') {
+      var c = Math.cos(-v.rot), n = Math.sin(-v.rot);
+      return { x: a * c - b * n, y: a * n + b * c };
+    }
+    var cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
+    var cy = Math.cos(v.yaw), sy2 = Math.sin(v.yaw);
+    if (Math.abs(cp * cy) < 1e-9) { return { x: 0, y: 0 }; }
+    var d = (b * sp * cy - a * sy2) / (cp * cy);
+    var z1 = -b * sp + d * cp;
+    return { x: a * cy - z1 * sy2, y: b * cp + d * sp };
   }
 
   // ---------------- 主题 -> CSS 变量 ----------------
@@ -327,6 +369,7 @@
     r.setProperty('--geo-arrow', T.arrow.fill);
     r.setProperty('--geo-axis-x', T.axis.x);
     r.setProperty('--geo-axis-y', T.axis.y);
+    r.setProperty('--geo-axis-z', T.axis.z || '#2f6feb');
   }
 
   // ---------------- 原点 (0,0) ----------------
@@ -349,8 +392,12 @@
   var axisYL = el('line', { 'class': 'geo-axis geo-axis-y' });
   var axisYA = el('polygon', { 'class': 'geo-axis-head-y' });
   var axisYT = el('text', { 'class': 'geo-axis-label geo-axis-label-y' }); axisYT.textContent = 'y';
+  var axisZL = el('line', { 'class': 'geo-axis geo-axis-z' });
+  var axisZA = el('polygon', { 'class': 'geo-axis-head-z' });
+  var axisZT = el('text', { 'class': 'geo-axis-label geo-axis-label-z' }); axisZT.textContent = 'z';
   layerOrigin.appendChild(axisXL); layerOrigin.appendChild(axisXA); layerOrigin.appendChild(axisXT);
   layerOrigin.appendChild(axisYL); layerOrigin.appendChild(axisYA); layerOrigin.appendChild(axisYT);
+  layerOrigin.appendChild(axisZL); layerOrigin.appendChild(axisZA); layerOrigin.appendChild(axisZT);
 
   function drawAxis(o, e, line, arrow, label) {
     line.setAttribute('x1', o.x); line.setAttribute('y1', o.y);
@@ -371,51 +418,53 @@
 
   // ---------------- 视图 ----------------
   function applyView() {
-    var v = S.view, k = center();
-    var deg = v.rot * 180 / Math.PI;
-    viewport.setAttribute('transform',
-      'translate(' + (k.x + v.panX) + ' ' + (k.y + v.panY) + ') scale(1 -1) rotate(' + deg + ') scale(' + v.scale + ')');
+    var v = S.view;
 
-    var o = worldToScreen(0, 0);
+    // 原点
+    var o = worldToScreen(0, 0, 0);
     originMark.setAttribute('transform', 'translate(' + o.x + ' ' + o.y + ')');
+
+    // 坐标轴（z 轴只在 3D 显示）
+    var showZ = (S.mode === '3d');
+    axisZL.style.display = showZ ? '' : 'none';
+    axisZA.style.display = showZ ? '' : 'none';
+    axisZT.style.display = showZ ? '' : 'none';
     if (B.showAxes) {
-      drawAxis(o, worldToScreen(AX.len, 0), axisXL, axisXA, axisXT);
-      drawAxis(o, worldToScreen(0, AX.len), axisYL, axisYA, axisYT);
+      drawAxis(o, worldToScreen(AX.len, 0, 0), axisXL, axisXA, axisXT);
+      drawAxis(o, worldToScreen(0, AX.len, 0), axisYL, axisYA, axisYT);
+      if (showZ) { drawAxis(o, worldToScreen(0, 0, AX.len), axisZL, axisZA, axisZT); }
     } else {
-      axisXA.setAttribute('points', ''); axisYA.setAttribute('points', '');
-      axisXT.textContent = ''; axisYT.textContent = '';
+      axisXA.setAttribute('points', ''); axisYA.setAttribute('points', ''); axisZA.setAttribute('points', '');
+      axisXT.textContent = ''; axisYT.textContent = ''; axisZT.textContent = '';
       axisXL.setAttribute('x2', o.x); axisXL.setAttribute('y2', o.y);
       axisYL.setAttribute('x2', o.x); axisYL.setAttribute('y2', o.y);
+      axisZL.setAttribute('x2', o.x); axisZL.setAttribute('y2', o.y);
     }
 
-    // 点、编号放在不缩放的层：位置世界->屏幕，大小恒定
+    // 点 / 编号（屏幕层，大小恒定）
     S.points.forEach(function (p) {
-      var c = p._el, s = worldToScreen(p.x, p.y);
-      if (c) {
-        c.setAttribute('cx', s.x);
-        c.setAttribute('cy', s.y);
-        c.setAttribute('r', p.size);
-        c.setAttribute('stroke-width', isSelPoint(p.id) ? 4 : T.point.strokeWidth);
+      var s = worldToScreen(p.x, p.y, p.z);
+      if (p._el) {
+        p._el.setAttribute('cx', s.x);
+        p._el.setAttribute('cy', s.y);
+        p._el.setAttribute('r', p.size);
+        p._el.setAttribute('stroke-width', isSelPoint(p.id) ? 4 : T.point.strokeWidth);
       }
-      if (p._label) {
-        p._label.setAttribute('x', s.x + 9);
-        p._label.setAttribute('y', s.y - 9);
-      }
-      if (p._role) {
-        p._role.setAttribute('cx', s.x);
-        p._role.setAttribute('cy', s.y);
-        p._role.setAttribute('r', p.size + 5);
-      }
+      if (p._label) { p._label.setAttribute('x', s.x + 9); p._label.setAttribute('y', s.y - 9); }
+      if (p._role) { p._role.setAttribute('cx', s.x); p._role.setAttribute('cy', s.y); p._role.setAttribute('r', p.size + 5); }
     });
-    // 边在缩放层：粗细除以缩放保持恒定；方向箭头在屏幕层，大小恒定
+
+    // 边（屏幕层：两端各自投影）
     S.edges.forEach(function (e) {
+      var a = getPoint(e.from), b = getPoint(e.to);
+      if (!a || !b) { return; }
+      var sa = worldToScreen(a.x, a.y, a.z), sb = worldToScreen(b.x, b.y, b.z);
       if (e._el) {
-        e._el.setAttribute('stroke-width', (isSelEdge(e.id) ? e.width * 2 : e.width) / v.scale);
+        e._el.setAttribute('x1', sa.x); e._el.setAttribute('y1', sa.y);
+        e._el.setAttribute('x2', sb.x); e._el.setAttribute('y2', sb.y);
+        e._el.setAttribute('stroke-width', isSelEdge(e.id) ? e.width * 2 : e.width);
       }
       if (e._arrow) {
-        var a = getPoint(e.from), b = getPoint(e.to);
-        if (!a || !b) { e._arrow.setAttribute('points', ''); return; }
-        var sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
         var dx = sb.x - sa.x, dy = sb.y - sa.y, len = Math.sqrt(dx * dx + dy * dy);
         var back = (b.size || 6) + 4;
         if (len - back < 5) { e._arrow.setAttribute('points', ''); return; }
@@ -428,12 +477,14 @@
       }
     });
 
-    // 角度标签（屏幕层，沿角平分线方向偏移固定像素）
+    // 角度标签：取世界方向上的一小步投影，得到屏幕方向；同顶点按 idx 错开半径
     S.angleItems.forEach(function (it) {
-      var s = worldToScreen(it.px, it.py);
-      var d = -it.dir - v.rot;             // 屏幕 y 翻转，方向也翻
-      it.el.setAttribute('x', s.x + Math.cos(d) * 30);
-      it.el.setAttribute('y', s.y + Math.sin(d) * 30);
+      var s = worldToScreen(it.px, it.py, it.pz);
+      var e2 = worldToScreen(it.px + Math.cos(it.dir), it.py + Math.sin(it.dir), it.pz);
+      var dx2 = e2.x - s.x, dy2 = e2.y - s.y, L = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+      var R = 30 + (it.idx || 0) * 16;
+      it.el.setAttribute('x', s.x + dx2 / L * R);
+      it.el.setAttribute('y', s.y + dy2 / L * R);
     });
 
     updateGrid();
@@ -449,12 +500,16 @@
   function updateGrid() {
     if (!B.showGrid) { gridPaths.forEach(function (p) { p.setAttribute('d', ''); }); return; }
     var w = stage.clientWidth, h = stage.clientHeight;
-    var cs = [screenToWorld(0, 0), screenToWorld(w, 0), screenToWorld(0, h), screenToWorld(w, h)];
+    // z=0 平面上的可视范围（把屏幕四角反投影到 z=0）
+    var cs = [unprojectToZ0(0, 0), unprojectToZ0(w, 0), unprojectToZ0(0, h), unprojectToZ0(w, h)];
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     cs.forEach(function (c) {
       if (c.x < minX) { minX = c.x; } if (c.x > maxX) { maxX = c.x; }
       if (c.y < minY) { minY = c.y; } if (c.y > maxY) { maxY = c.y; }
     });
+    if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) {
+      gridPaths.forEach(function (p) { p.setAttribute('d', ''); }); return;
+    }
     // 只保留屏幕间距够大的层级（太密的自动不显示）
     var levels = [], step = B.grid.base;
     for (var i = 0; i < 12 && levels.length < B.grid.maxLevels; i++, step *= 10) {
@@ -464,18 +519,19 @@
     for (var k = 0; k < gridPaths.length; k++) {
       var st = levels[k];
       if (!st) { gridPaths[k].setAttribute('d', ''); continue; }
-      var d = '';
-      var xA = rnd4(minX), xB = rnd4(maxX), yA = rnd4(minY), yB = rnd4(maxY);
-      // 用整数下标乘 step，避免 0.1 这种步长累加产生浮点误差
       var ix0 = Math.ceil(minX / st), ix1 = Math.floor(maxX / st);
-      for (var ix = ix0; ix <= ix1; ix++) {
-        var gx = rnd4(ix * st);
-        d += 'M' + gx + ' ' + yA + 'L' + gx + ' ' + yB;
-      }
       var iy0 = Math.ceil(minY / st), iy1 = Math.floor(maxY / st);
+      if (ix1 - ix0 > 500 || iy1 - iy0 > 500) { gridPaths[k].setAttribute('d', ''); continue; }
+      var d = '';
+      for (var ix = ix0; ix <= ix1; ix++) {
+        var gx = ix * st;
+        var s1 = worldToScreen(gx, minY, 0), s2 = worldToScreen(gx, maxY, 0);
+        d += 'M' + rnd4(s1.x) + ' ' + rnd4(s1.y) + 'L' + rnd4(s2.x) + ' ' + rnd4(s2.y);
+      }
       for (var iy = iy0; iy <= iy1; iy++) {
-        var gy = rnd4(iy * st);
-        d += 'M' + xA + ' ' + gy + 'L' + xB + ' ' + gy;
+        var gy = iy * st;
+        var t1 = worldToScreen(minX, gy, 0), t2 = worldToScreen(maxX, gy, 0);
+        d += 'M' + rnd4(t1.x) + ' ' + rnd4(t1.y) + 'L' + rnd4(t2.x) + ' ' + rnd4(t2.y);
       }
       gridPaths[k].setAttribute('d', d);
     }
@@ -489,7 +545,7 @@
     S.edges.forEach(function (e) {
       var a = getPoint(e.from), b = getPoint(e.to);
       if (!a || !b) { return; }
-      var ln = el('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, 'stroke-linecap': 'round' });
+      var ln = el('line', { 'stroke-linecap': 'round' });
       ln.setAttribute('class', 'geo-edge' + (isSelEdge(e.id) ? ' is-selected' : ''));
       ln.style.setProperty('--ec', e.color);
       ln.dataset.edgeId = e.id;
@@ -528,12 +584,17 @@
     // 角度标签
     S.angleItems = [];
     if (S.showAngles) {
+      var perV = {};
       computeAngles().forEach(function (a) {
+        // 同一个顶点上的多个角度，按序号错开半径，避免叠在一起
+        var key = a.px + ',' + a.py + ',' + a.pz;
+        var idx = perV[key] || 0;
+        perV[key] = idx + 1;
         var t2 = el('text', { 'class': 'geo-angle', 'text-anchor': 'middle' });
         var deg = a.ang * 180 / Math.PI;
-        t2.textContent = deg.toFixed(1) + '°/' + a.ang.toFixed(3) + 'rad';
+        t2.textContent = deg.toFixed(1) + '°/' + a.ang.toFixed(2);
         layerLabels.appendChild(t2);
-        S.angleItems.push({ el: t2, px: a.px, py: a.py, dir: a.dir });
+        S.angleItems.push({ el: t2, px: a.px, py: a.py, pz: a.pz, dir: a.dir, idx: idx });
       });
     }
 
@@ -544,7 +605,7 @@
 
   // ---------------- 数据操作 ----------------
   function addPoint(x, y) {
-    var p = { id: S.nextPointId++, x: x, y: y, label: S.nextLabel++, side: '', role: '', color: S.style.pointColor, size: S.style.pointSize };
+    var p = { id: S.nextPointId++, x: x, y: y, z: 0, label: S.nextLabel++, side: '', role: '', color: S.style.pointColor, size: S.style.pointSize };
     S.points.push(p);
     render();
     return p;
@@ -675,6 +736,15 @@
       coordWrap.appendChild(cx);
       coordWrap.appendChild(cy);
       infoBody.appendChild(infoRow('坐标', coordWrap));
+      if (S.mode === '3d') {
+        var cz = document.createElement('input');
+        cz.type = 'number'; cz.step = 'any'; cz.className = 'coord';
+        cz.value = rnd4(p.z || 0); cz.title = '改完按回车应用';
+        function commitZ() { var v = parseFloat(cz.value); if (isFinite(v)) { p.z = v; render(); } }
+        cz.addEventListener('change', commitZ);
+        cz.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { commitZ(); } });
+        infoBody.appendChild(infoRow('z', cz));
+      }
       infoBody.appendChild(infoRow('染色', infoInput(p.side, function (v) { p.side = v; })));
 
       var roleWrap = document.createElement('span');
@@ -809,24 +879,22 @@
     if (drag.kind === 'point') {
       if (!drag.moved) { return; }
       var ids = isSelPoint(drag.id) ? S.sel.points : [drag.id];
-      var w0 = screenToWorld(drag.lx, drag.ly), w1 = screenToWorld(q.x, q.y);
-      var ddx = w1.x - w0.x, ddy = w1.y - w0.y;
-      ids.forEach(function (id) { var p = getPoint(id); if (p) { p.x += ddx; p.y += ddy; } });
+      var dd = screenDeltaToWorld(q.x - drag.lx, q.y - drag.ly);
+      ids.forEach(function (id) { var p = getPoint(id); if (p) { p.x += dd.x; p.y += dd.y; p.z = (p.z || 0) + dd.z; } });
       drag.lx = q.x; drag.ly = q.y;
       render();
 
     } else if (drag.kind === 'edge') {
       if (!drag.moved) { return; }
       var eids = isSelEdge(drag.id) ? S.sel.edges : [drag.id];
-      var a0 = screenToWorld(drag.lx, drag.ly), a1 = screenToWorld(q.x, q.y);
-      var edx = a1.x - a0.x, edy = a1.y - a0.y;
+      var ed = screenDeltaToWorld(q.x - drag.lx, q.y - drag.ly);
       var moved = {};
       eids.forEach(function (id) {
-        var ed = getEdge(id); if (!ed) { return; }
-        [ed.from, ed.to].forEach(function (pid) {
+        var e0 = getEdge(id); if (!e0) { return; }
+        [e0.from, e0.to].forEach(function (pid) {
           if (moved[pid]) { return; }
           moved[pid] = 1;
-          var p = getPoint(pid); if (p) { p.x += edx; p.y += edy; }
+          var p = getPoint(pid); if (p) { p.x += ed.x; p.y += ed.y; p.z = (p.z || 0) + ed.z; }
         });
       });
       drag.lx = q.x; drag.ly = q.y;
@@ -837,16 +905,23 @@
       if (S.dragMode === 'pan') {
         S.view.panX += q.x - drag.lx; S.view.panY += q.y - drag.ly; applyView();
       } else if (S.dragMode === 'rotate') {
-        var k = center();
-        var r0 = Math.atan2(drag.ly - k.y, drag.lx - k.x);
-        var r1 = Math.atan2(q.y - k.y, q.x - k.x);
-        var da = r1 - r0;
-        if (da > Math.PI) { da -= Math.PI * 2; } else if (da < -Math.PI) { da += Math.PI * 2; }
-        S.view.rot -= da;              // 世界 y 向上、屏幕 y 向下，旋转方向取反才跟手
-        var cs = Math.cos(da), sn = Math.sin(da);
-        var px = S.view.panX, py = S.view.panY;
-        S.view.panX = px * cs - py * sn; S.view.panY = px * sn + py * cs;
-        applyView();
+        if (S.mode === '3d') {
+          // 3D：左右拖 = 绕世界 Y 轴 yaw，上下拖 = 俯仰 pitch（限制 ±90°）
+          S.view.yaw += (q.x - drag.lx) * 0.008;
+          S.view.pitch = clamp(S.view.pitch + (q.y - drag.ly) * 0.008, -Math.PI / 2 + 0.02, Math.PI / 2 - 0.02);
+          applyView();
+        } else {
+          var k = center();
+          var r0 = Math.atan2(drag.ly - k.y, drag.lx - k.x);
+          var r1 = Math.atan2(q.y - k.y, q.x - k.x);
+          var da = r1 - r0;
+          if (da > Math.PI) { da -= Math.PI * 2; } else if (da < -Math.PI) { da += Math.PI * 2; }
+          S.view.rot -= da;            // 世界 y 向上、屏幕 y 向下，旋转方向取反才跟手
+          var cs = Math.cos(da), sn = Math.sin(da);
+          var px = S.view.panX, py = S.view.panY;
+          S.view.panX = px * cs - py * sn; S.view.panY = px * sn + py * cs;
+          applyView();
+        }
       } else { showMarquee(drag.sx, drag.sy, q.x, q.y); }
       drag.lx = q.x; drag.ly = q.y;
     }
@@ -861,14 +936,14 @@
       if (!drag.moved) { clickEdge(drag.id); }
     } else {
       if (!drag.moved) {
-        var w = screenToWorld(drag.sx, drag.sy);
+        var w = unprojectToZ0(drag.sx, drag.sy);
         showMenu(drag.sx, drag.sy, w.x, w.y);
       } else if (S.dragMode === 'select') {
         hideMarquee();
         var x0 = Math.min(drag.sx, q.x), x1 = Math.max(drag.sx, q.x);
         var y0 = Math.min(drag.sy, q.y), y1 = Math.max(drag.sy, q.y);
         var spr = {};
-        S.points.forEach(function (p) { spr[p.id] = worldToScreen(p.x, p.y); });
+        S.points.forEach(function (p) { spr[p.id] = worldToScreen(p.x, p.y, p.z); });
         S.sel.points = S.points.filter(function (p) {
           var s = spr[p.id];
           return s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
@@ -918,7 +993,7 @@
     if (!svg.contains(e.target)) { return; }   // 面板 / 信息窗等 UI 上的右键交给浏览器
     e.preventDefault();
     hideMenu();
-    var q = localXY(e), w = screenToWorld(q.x, q.y);
+    var q = localXY(e), w = unprojectToZ0(q.x, q.y);
 
     // 右键「点 / 边」→ 呼出菜单
     var pid = idOf(e.target, 'pointId'), eid = idOf(e.target, 'edgeId');
@@ -936,14 +1011,24 @@
   stage.addEventListener('wheel', function (e) {
     e.preventDefault();
     var q = localXY(e), k = center();
-    var w = screenToWorld(q.x, q.y);
-    var factor = Math.pow(B.zoomStep, -e.deltaY);
-    S.view.scale = clamp(S.view.scale * factor, B.zoomMin, B.zoomMax);
-    var rs = rotScale(w.x, w.y, S.view.scale, S.view.rot);
-    S.view.panX = q.x - k.x - rs.x;
-    S.view.panY = q.y - k.y - rs.y;
+    var s0 = S.view.scale;
+    var s1 = clamp(s0 * Math.pow(B.zoomStep, -e.deltaY), B.zoomMin, B.zoomMax);
+    // 让光标下的点不动：C' = q - (s'/s)(q - C)（2D / 3D 通用）
+    var Cx = k.x + S.view.panX, Cy = k.y + S.view.panY, r = s1 / s0;
+    S.view.scale = s1;
+    S.view.panX = (q.x - r * (q.x - Cx)) - k.x;
+    S.view.panY = (q.y - r * (q.y - Cy)) - k.y;
     applyView();
   }, { passive: false });
+
+  // ---------------- 2D / 3D 切换 ----------------
+  function setMode(m) {
+    S.mode = m;
+    btnMode.textContent = (m === '3d') ? '2D' : '3D';
+    btnMode.classList.toggle('on', m === '3d');
+    render();
+  }
+  btnMode.addEventListener('click', function () { setMode(S.mode === '3d' ? '2d' : '3d'); });
 
   btnClear.addEventListener('click', function () {
     if (!S.points.length && !S.edges.length) { return; }
@@ -960,6 +1045,19 @@
   document.getElementById('imp-cancel').addEventListener('click', closeImport);
   impMask.addEventListener('pointerdown', function (e) { if (e.target === impMask) { closeImport(); } });
 
+  // 点：每行 x y [z]
+  function parsePointsX(text) {
+    var out = [];
+    text.split(/\r?\n/).forEach(function (line) {
+      line = line.trim();
+      if (!line || line[0] === '#') { return; }
+      var p = line.split(/[\s,]+/).map(Number);
+      if (p.length >= 2 && isFinite(p[0]) && isFinite(p[1])) {
+        out.push({ x: p[0], y: p[1], z: (p.length >= 3 && isFinite(p[2])) ? p[2] : 0 });
+      }
+    });
+    return out;
+  }
   function parseNums(text, cols) {
     var out = [];
     text.split(/\r?\n/).forEach(function (line) {
@@ -975,8 +1073,8 @@
     return out;
   }
   function doImport(replace) {
-    var pts = parseNums(impPoints.value, 2);
-    if (!pts.length) { alert('点数据为空或格式不对（每行应为 x y）'); return; }
+    var pts = parsePointsX(impPoints.value);
+    if (!pts.length) { alert('点数据为空或格式不对（每行应为 x y 或 x y z）'); return; }
     var eds = parseNums(impEdges.value, 2);
 
     if (replace) {
@@ -987,7 +1085,7 @@
     var labelToId = {};
     pts.forEach(function (p, i) {
       var label = base + i + 1;
-      var pt = { id: S.nextPointId++, x: p[0], y: p[1], label: label, side: '', role: '', color: S.style.pointColor, size: S.style.pointSize };
+      var pt = { id: S.nextPointId++, x: p.x, y: p.y, z: p.z, label: label, side: '', role: '', color: S.style.pointColor, size: S.style.pointSize };
       S.points.push(pt);
       labelToId[label] = pt.id;
     });
@@ -1010,19 +1108,28 @@
 
   function fitToView() {
     if (!S.points.length) { return; }
-    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    var minX = Infinity, minY = Infinity, minZ = Infinity;
+    var maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
     S.points.forEach(function (p) {
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      var z = p.z || 0;
+      minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
     });
-    var bw = Math.max(maxX - minX, 1), bh = Math.max(maxY - minY, 1);
+    var span = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1);
     var vw = stage.clientWidth || 800, vh = stage.clientHeight || 600;
-    var s = Math.min((vw - 140) / bw, (vh - 140) / bh);
-    s = clamp(s, B.zoomMin, B.zoomMax);
+    var s = clamp(Math.min(vw - 140, vh - 140) / span, B.zoomMin, B.zoomMax);
     S.view.scale = s;
-    var bc = rotScale((minX + maxX) / 2, (minY + maxY) / 2, s, S.view.rot);
-    S.view.panX = -bc.x;
-    S.view.panY = -bc.y;
+    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    if (S.mode === '3d') {
+      var pc = rot3d(cx, cy, cz);
+      S.view.panX = -pc.x * s;
+      S.view.panY = pc.y * s;
+    } else {
+      var bc = rotScale(cx, cy, s, S.view.rot);
+      S.view.panX = -bc.x;
+      S.view.panY = bc.y;
+    }
     applyView();
   }
 
@@ -1043,7 +1150,7 @@
   // ---------------- 启动 ----------------
   applyTheme();
   setDragMode(S.dragMode);
-  render();
+  setMode(S.mode);
 
   window.GEO.state = S;
   window.GEO.render = render;

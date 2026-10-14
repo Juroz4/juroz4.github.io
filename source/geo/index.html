@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>凸包画板</title>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 <div id="app">
@@ -18,15 +18,13 @@
     <span class="ctl-target" id="ctl-target">新对象</span>
 
     <button id="btn-clear" class="geo-danger">清空</button>
+    <button id="btn-mode" class="geo-mode">3D</button>
   </header>
 
   <div id="stage">
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
-      <g id="viewport">
-        <g id="layer-grid"></g>
-        <g id="layer-edges"></g>
-        <g id="layer-hull"></g>
-      </g>
+      <g id="layer-grid"></g>
+      <g id="layer-edges"></g>
       <g id="layer-origin"></g>
       <g id="layer-points"></g>
       <g id="layer-arrows"></g>
@@ -61,8 +59,8 @@
   <div id="import-box">
     <div class="imp-title">导入</div>
 
-    <div class="imp-label">点：每行 <code>x y</code>，编号按行序 1…n</div>
-    <textarea id="imp-points" rows="7" placeholder="0 0&#10;100 0&#10;50 80"></textarea>
+    <div class="imp-label">点：每行 <code>x y</code> 或 <code>x y z</code>，编号按行序 1…n</div>
+    <textarea id="imp-points" rows="7" placeholder="0 0 0&#10;100 0 0&#10;50 80 40"></textarea>
 
     <div class="imp-label">边：每行 <code>u v</code>（填上面点的编号；可空）</div>
     <textarea id="imp-edges" rows="5" placeholder="1 2&#10;2 3&#10;3 1"></textarea>
@@ -75,7 +73,7 @@
   </div>
 </div>
 
-<script src="config.js?v=20"></script>
-<script src="geo.js?v=20"></script>
+<script src="config.js?v=22"></script>
+<script src="geo.js?v=22"></script>
 </body>
 </html>

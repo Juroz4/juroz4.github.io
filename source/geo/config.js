@@ -65,7 +65,7 @@ window.GEO.config = {
     src:   { color: '#12b76a' },   // 源点圈
     snk:   { color: '#f04438' },   // 汇点圈
     arrow: { fill: '#98a2b3' },    // 边的方向箭头
-    axis:  { x: '#e8590c', y: '#12b76a', len: 100 }  // 初始 x/y 坐标轴（长 100 世界单位）
+    axis:  { x: '#e8590c', y: '#12b76a', z: '#2f6feb', len: 100 }  // 初始 x/y/z 坐标轴（长 100 世界单位）
   },
 
   /* ---------------- 交互参数 ---------------- */
@@ -74,6 +74,9 @@ window.GEO.config = {
     zoomStep:        1.003,  // 滚轮灵敏度（越大越快）
     zoomMin:         0.01,   // 最小缩放
     zoomMax:         1000,   // 最大缩放（要能看到 0.1 的格子，就得放得足够大）
+    mode:            '2d',   // 初始模式：'2d' | '3d'（右上角按钮可切）
+    pitch:          -32,     // 3D 初始俯仰角（度）
+    yaw:             26,     // 3D 初始偏航角（度）
     dragMode:        'select', // 拖动空白时默认模式：'select'(框选) | 'pan'(平移) | 'rotate'(旋转)
     showGrid:        true,   // 是否显示网格
     showAxes:        true,   // 是否显示初始 x/y 坐标轴

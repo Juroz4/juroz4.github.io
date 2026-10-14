@@ -71,6 +71,14 @@ body {
 }
 .geo-danger:hover { background: #fef3f2; }
 
+/* 右上角 2D / 3D 切换 */
+.geo-mode {
+  border: 1px solid var(--geo-panel-btn-active-bg);
+  background: #fff; color: var(--geo-panel-btn-active-bg);
+  border-radius: 6px; padding: 5px 14px; cursor: pointer; font-weight: 600;
+}
+.geo-mode.on { background: var(--geo-panel-btn-active-bg); color: #fff; }
+
 /* ---------- 画布 ---------- */
 #stage {
   position: relative;
@@ -156,8 +164,13 @@ body {
 .geo-origin line { stroke: var(--geo-origin, #9aa4b2); stroke-width: 1; }
 .geo-origin text { fill: var(--geo-origin, #9aa4b2); font-size: 10px; }
 
-/* 点的编号文字 */
-.geo-label { fill: var(--geo-label, #667085); font-size: 11px; pointer-events: none; user-select: none; }
+/* 点的编号文字（同样加白色光晕） */
+.geo-label {
+  fill: var(--geo-label, #667085);
+  font-size: 11px; pointer-events: none; user-select: none;
+  paint-order: stroke;
+  stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round;
+}
 
 /* 凸包轮廓 */
 .geo-hull {
@@ -172,18 +185,27 @@ body {
 .geo-centroid circle { fill: var(--geo-centroid, #7a5af8); }
 .geo-centroid text { fill: var(--geo-centroid, #7a5af8); font-size: 11px; }
 
-/* 角度标签 */
-.geo-angle { fill: var(--geo-angle, #b54708); font-size: 11px; pointer-events: none; user-select: none; }
+/* 角度标签（白色描边光晕，重叠时也能看清） */
+.geo-angle {
+  fill: var(--geo-angle, #b54708);
+  font-size: 11px;
+  pointer-events: none; user-select: none;
+  paint-order: stroke;
+  stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round;
+}
 
 /* 初始 x/y 坐标轴 */
 .geo-axis { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .geo-axis-x { stroke: var(--geo-axis-x, #e8590c); }
 .geo-axis-y { stroke: var(--geo-axis-y, #12b76a); }
+.geo-axis-z { stroke: var(--geo-axis-z, #2f6feb); }
 .geo-axis-head-x { fill: var(--geo-axis-x, #e8590c); }
 .geo-axis-head-y { fill: var(--geo-axis-y, #12b76a); }
+.geo-axis-head-z { fill: var(--geo-axis-z, #2f6feb); }
 .geo-axis-label { font-size: 11px; font-weight: 600; }
 .geo-axis-label-x { fill: var(--geo-axis-x, #e8590c); }
 .geo-axis-label-y { fill: var(--geo-axis-y, #12b76a); }
+.geo-axis-label-z { fill: var(--geo-axis-z, #2f6feb); }
 
 /* 源点 / 汇点 的圈 */
 .geo-role { fill: none; stroke-width: 2.5; pointer-events: none; }
