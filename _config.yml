@@ -46,14 +46,14 @@ relative_link: false
 future: true
 syntax_highlighter: highlight.js
 highlight:
-  line_number: true
+  line_number: false      # 主题的行号表格会串行，关掉（代码块更干净）
   auto_detect: false
   tab_replace: ''
   wrap: true
   hljs: false
 prismjs:
   preprocess: true
-  line_number: true
+  line_number: false
   tab_replace: ''
 
 # Markdown (hexo-renderer-markdown-it) —— 数学公式靠这里渲染

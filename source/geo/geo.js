@@ -516,12 +516,22 @@
       if (step * S.view.scale >= B.grid.minGap) { levels.push(step); }
     }
     if (!levels.length) { levels = [B.grid.base]; }
-    for (var k = 0; k < gridPaths.length; k++) {
+    // 逐层画（从粗到细）。总条数有预算；3D 侧着看时平面可视范围会暴涨，
+    // 超预算就把步长自动放大，避免格子太密把帧拖死。
+    var budget = 420, drawn = 0;
+    for (var k = levels.length - 1; k >= 0; k--) {
       var st = levels[k];
-      if (!st) { gridPaths[k].setAttribute('d', ''); continue; }
-      var ix0 = Math.ceil(minX / st), ix1 = Math.floor(maxX / st);
-      var iy0 = Math.ceil(minY / st), iy1 = Math.floor(maxY / st);
-      if (ix1 - ix0 > 500 || iy1 - iy0 > 500) { gridPaths[k].setAttribute('d', ''); continue; }
+      var ix0, ix1, iy0, iy1, need, guard = 0;
+      while (true) {
+        ix0 = Math.ceil(minX / st); ix1 = Math.floor(maxX / st);
+        iy0 = Math.ceil(minY / st); iy1 = Math.floor(maxY / st);
+        need = (ix1 - ix0 + 1) + (iy1 - iy0 + 1);
+        if (isFinite(need) && need <= budget) { break; }
+        st *= 10;
+        if (++guard > 12) { need = Infinity; break; }
+      }
+      if (!isFinite(need) || need <= 0 || need > budget) { gridPaths[k].setAttribute('d', ''); continue; }
+      budget -= need; drawn++;
       var d = '';
       for (var ix = ix0; ix <= ix1; ix++) {
         var gx = ix * st;
@@ -535,6 +545,7 @@
       }
       gridPaths[k].setAttribute('d', d);
     }
+    for (var kk = levels.length; kk < gridPaths.length; kk++) { gridPaths[kk].setAttribute('d', ''); }
   }
 
   // ---------------- 渲染 ----------------
