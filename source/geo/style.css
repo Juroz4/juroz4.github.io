@@ -207,6 +207,11 @@ body {
 .geo-axis-label-y { fill: var(--geo-axis-y, #12b76a); }
 .geo-axis-label-z { fill: var(--geo-axis-z, #2f6feb); }
 
+/* 画布里的文字不参与"框选/选中"，拖动旋转平移时不会变蓝 */
+#canvas { user-select: none; -webkit-user-select: none; -ms-user-select: none; }
+.geo-origin, .geo-axis, .geo-axis-head, .geo-axis-label,
+.geo-label, .geo-angle, .geo-role, .geo-arrow { pointer-events: none; }
+
 /* 源点 / 汇点 的圈 */
 .geo-role { fill: none; stroke-width: 2.5; pointer-events: none; }
 .geo-role[data-role="s"] { stroke: var(--geo-src, #12b76a); }
