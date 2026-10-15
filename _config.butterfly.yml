@@ -63,8 +63,8 @@ social:
 favicon: /img/favicon.png
 
 avatar:
-  img: /img/butterfly-icon.png
-  effect: false
+  img: /img/avatar.png
+  effect: false      # 关掉头像旋转（去掉这行反而会转）
 
 # Disable all banner images
 disable_top_img: false
